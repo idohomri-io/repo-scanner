@@ -55,6 +55,31 @@ docker compose up --build
 
 Reports are written to `reports/YYYY-MM-DD.md` and normalized findings to `reports/YYYY-MM-DD.findings.json`.
 
+If `WEBHOOK_URL` is set, the scanner POSTs a JSON array with one object per repo:
+
+```json
+[
+  {
+    "date": "2026-06-19",
+    "repo": "owner/repo",
+    "status": "vulnerable",
+    "manifests": ["package-lock.json"],
+    "summary": {
+      "critical": 0,
+      "high": 1,
+      "moderate": 0,
+      "low": 0,
+      "unknown": 0,
+      "failed": 0
+    },
+    "findings": [],
+    "error": null
+  }
+]
+```
+
+`status` is one of `clean`, `vulnerable`, or `failed`.
+
 ## Optional LLM Recommendations
 
 Disable LLM output:

@@ -36,7 +36,8 @@ fi
 BODY_FILE="$(mktemp)"
 FINDINGS_NDJSON="$(mktemp)"
 FAILED_FILE="$(mktemp)"
-trap 'rm -f "$BODY_FILE" "$FINDINGS_NDJSON" "$FAILED_FILE"; [[ -n "${WORK_ROOT:-}" ]] && rm -rf "$WORK_ROOT"' EXIT
+REPO_STATES_FILE="$(mktemp)"
+trap 'rm -f "$BODY_FILE" "$FINDINGS_NDJSON" "$FAILED_FILE" "$REPO_STATES_FILE"; [[ -n "${WORK_ROOT:-}" ]] && rm -rf "$WORK_ROOT"' EXIT
 
 WORK_ROOT="$(mktemp -d)"
 
@@ -47,6 +48,22 @@ LOW=0
 UNKNOWN=0
 FAILED=0
 
+record_repo_state() {
+  local repo="$1" status="$2" manifests="$3" error="${4:-}"
+
+  jq -c -n \
+    --arg repo "$repo" \
+    --arg status "$status" \
+    --arg manifests "$manifests" \
+    --arg error "$error" \
+    '{
+      repo: $repo,
+      status: $status,
+      manifests: (if $manifests == "" then [] else $manifests | split(", ") end),
+      error: (if $error == "" then null else $error end)
+    }' >> "$REPO_STATES_FILE"
+}
+
 for repo_ref in "${REPOS[@]}"; do
   repo_name="$(repo_display_name "$repo_ref")"
   echo "Scanning $repo_name..."
@@ -56,6 +73,7 @@ for repo_ref in "${REPOS[@]}"; do
     echo "  WARNING: failed to prepare $repo_name." >&2
     report_repo_section "$repo_name" "" >> "$BODY_FILE"
     report_repo_failed "Could not clone or read this repo." >> "$BODY_FILE"
+    record_repo_state "$repo_name" "failed" "" "Could not clone or read this repo."
     printf '%s\n' "$repo_name" >> "$FAILED_FILE"
     FAILED=$((FAILED + 1))
     continue
@@ -68,6 +86,7 @@ for repo_ref in "${REPOS[@]}"; do
   if ! run_osv_scan "$CHECKOUT_DIR" "$OSV_JSON_FILE"; then
     echo "  WARNING: OSV scan failed for $repo_name." >&2
     report_repo_failed "OSV-Scanner failed before producing valid JSON." >> "$BODY_FILE"
+    record_repo_state "$repo_name" "failed" "$MANIFESTS" "OSV-Scanner failed before producing valid JSON."
     printf '%s\n' "$repo_name" >> "$FAILED_FILE"
     rm -f "$OSV_JSON_FILE"
     FAILED=$((FAILED + 1))
@@ -80,11 +99,13 @@ for repo_ref in "${REPOS[@]}"; do
   FINDING_COUNT="$(printf '%s\n' "$REPO_FINDINGS" | jq -s 'length')"
   if [[ "$FINDING_COUNT" -eq 0 ]]; then
     report_no_findings >> "$BODY_FILE"
+    record_repo_state "$repo_name" "clean" "$MANIFESTS"
     continue
   fi
 
   printf '%s\n' "$REPO_FINDINGS" >> "$FINDINGS_NDJSON"
   report_repo_findings_count "$FINDING_COUNT" >> "$BODY_FILE"
+  record_repo_state "$repo_name" "vulnerable" "$MANIFESTS"
 done
 
 if [[ -s "$FINDINGS_NDJSON" ]]; then
@@ -151,16 +172,30 @@ echo "$REPORT_CONTENT"
 if [[ -n "${WEBHOOK_URL:-}" ]]; then
   PAYLOAD="$(jq -n \
     --arg date "$DATE_STR" \
-    --argjson repos_scanned "${#REPOS[@]}" \
-    --argjson critical "$CRITICAL" \
-    --argjson high "$HIGH" \
-    --argjson moderate "$MODERATE" \
-    --argjson low "$LOW" \
-    --argjson unknown "$UNKNOWN" \
-    --argjson failed "$FAILED" \
+    --slurpfile repos "$REPO_STATES_FILE" \
     --slurpfile findings "$FINDINGS_FILE" \
-    --arg report_markdown "$REPORT_CONTENT" \
-    '{date: $date, repos_scanned: $repos_scanned, summary: {critical: $critical, high: $high, moderate: $moderate, low: $low, unknown: $unknown, failed: $failed}, findings: $findings[0], report_markdown: $report_markdown}')"
+    '
+    def severity_counts($items):
+      {
+        critical: ($items | map(select(.severity == "critical")) | length),
+        high: ($items | map(select(.severity == "high")) | length),
+        moderate: ($items | map(select(.severity == "moderate")) | length),
+        low: ($items | map(select(.severity == "low")) | length),
+        unknown: ($items | map(select(.severity == "unknown")) | length)
+      };
+
+    $repos | map(. as $repo_state |
+      ($findings[0] | map(select(.repo == $repo_state.repo))) as $repo_findings |
+      {
+        date: $date,
+        repo: $repo_state.repo,
+        status: $repo_state.status,
+        manifests: $repo_state.manifests,
+        summary: (severity_counts($repo_findings) + {failed: (if $repo_state.status == "failed" then 1 else 0 end)}),
+        findings: $repo_findings,
+        error: $repo_state.error
+      }
+    )')"
 
   if ! curl -fsS -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$WEBHOOK_URL" >/dev/null 2>&1; then
     echo "WARNING: failed to POST results to WEBHOOK_URL — continuing." >&2
