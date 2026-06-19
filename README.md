@@ -15,13 +15,9 @@ OSV-Scanner is the default vulnerability source. The LLM is optional and is used
 
 ## Configure
 
-Copy `.env.example` to `.env` and edit it:
+Edit the `environment` block in `docker-compose.yml`. No `.env` file is required.
 
-```sh
-cp .env.example .env
-```
-
-Repos can be configured as a comma-separated `REPOS` value or in `repos.txt`.
+Repos are configured as a comma-separated `REPOS` value.
 
 Supported repo formats:
 
@@ -36,11 +32,12 @@ git@gitlab.com:group/project.git
 
 For private HTTPS repos, set the matching provider token:
 
-```env
-GH_TOKEN=...
-GITLAB_TOKEN=...
-BITBUCKET_USERNAME=your-bitbucket-username
-BITBUCKET_TOKEN=...
+```yaml
+environment:
+  GH_TOKEN: ...
+  GITLAB_TOKEN: ...
+  BITBUCKET_USERNAME: your-bitbucket-username
+  BITBUCKET_TOKEN: ...
 ```
 
 GitHub `owner/repo` shorthand expands to `https://github.com/owner/repo.git` and uses `GH_TOKEN` when set.
@@ -50,7 +47,13 @@ For SSH Git URLs, mount/provide SSH credentials to the container environment.
 ## Run
 
 ```sh
-docker compose up --build
+docker compose up -d
+```
+
+The provided `docker-compose.yml` uses the published image:
+
+```text
+ghcr.io/idohomri-io/repo-scanner:latest
 ```
 
 Reports are written to `reports/YYYY-MM-DD.md` and normalized findings to `reports/YYYY-MM-DD.findings.json`.
@@ -84,25 +87,25 @@ If `WEBHOOK_URL` is set, the scanner POSTs a JSON array with one object per repo
 
 Disable LLM output:
 
-```env
-LLM_PROVIDER=none
+```yaml
+LLM_PROVIDER: none
 ```
 
 Use Ollama:
 
-```env
-LLM_PROVIDER=ollama
-LLM_ENDPOINT=http://host.docker.internal:11434
-LLM_MODEL=llama3.1
+```yaml
+LLM_PROVIDER: ollama
+LLM_ENDPOINT: http://host.docker.internal:11434
+LLM_MODEL: llama3.1
 ```
 
 Use an OpenAI-compatible API:
 
-```env
-LLM_PROVIDER=openai-compatible
-LLM_ENDPOINT=https://api.openai.com/v1
-LLM_MODEL=gpt-4.1-mini
-LLM_API_KEY=...
+```yaml
+LLM_PROVIDER: openai-compatible
+LLM_ENDPOINT: https://api.openai.com/v1
+LLM_MODEL: gpt-4.1-mini
+LLM_API_KEY: ...
 ```
 
 ## Exit Codes

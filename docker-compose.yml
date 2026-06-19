@@ -1,7 +1,29 @@
 services:
   repo-scanner:
-    build: .
-    env_file: .env
+    image: ghcr.io/idohomri-io/repo-scanner:latest
+    pull_policy: always
+    environment:
+      # Comma-separated repo list.
+      # Accepts GitHub owner/repo shorthand, full Git URLs, or local paths.
+      REPOS: owner/repo1,https://gitlab.com/group/repo2.git,https://bitbucket.org/workspace/repo3.git
+
+      # Optional provider tokens for cloning private HTTPS repos.
+      GH_TOKEN:
+      GITLAB_TOKEN:
+      BITBUCKET_USERNAME:
+      BITBUCKET_TOKEN:
+
+      # Hours between scans.
+      INTERVAL_HOURS: "24"
+
+      # Optional: POST a per-repo JSON array payload after each scan.
+      WEBHOOK_URL:
+
+      # Optional LLM recommendations. Use "none", "ollama", or "openai-compatible".
+      LLM_PROVIDER: none
+      LLM_ENDPOINT: http://host.docker.internal:11434
+      LLM_MODEL: llama3.1
+      LLM_API_KEY:
     volumes:
       - ./reports:/app/reports
       # Uncomment to scan local repos and reference them in REPOS as /repos/name.
