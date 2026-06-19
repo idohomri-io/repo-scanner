@@ -42,6 +42,12 @@ environment:
 
 GitHub `owner/repo` shorthand expands to `https://github.com/owner/repo.git` and uses `GH_TOKEN` when set.
 
+The scanner only needs read access. For remote Git repos it performs a read-only `git ls-remote` check followed by `git clone`; it never pushes, creates branches, opens PRs, or writes to the repo.
+
+For GitHub, prefer a fine-grained personal access token limited to the selected repositories with `Contents: Read-only`. Classic GitHub PATs use the broad `repo` scope for private repositories, which can look like write access in the GitHub UI even though this scanner only performs read operations.
+
+GitHub may return `Write access to repository not granted` when the token is missing, not authorized for the repo, blocked by org SSO, or lacks `Contents: Read-only`. In this scanner that error happens during the read-access check, not during a write.
+
 For SSH Git URLs, mount/provide SSH credentials to the container environment.
 
 ## Run
@@ -111,3 +117,12 @@ LLM_API_KEY: ...
 ## Exit Codes
 
 `scan.sh` exits with `1` when it finds critical/high vulnerabilities or when at least one repo failed to scan. The daemon entrypoint logs that and keeps running on the configured interval.
+
+## Troubleshooting Clone Failures
+
+Failed repo sections include the captured checkout error plus a provider-specific hint. Common causes:
+
+- `Repository not found`: repo name is wrong, the repo is private, or the token does not have access.
+- `Authentication failed`: token is missing, expired, malformed, or lacks repo read permissions.
+- `Could not resolve host`: the container cannot reach the provider DNS/network.
+- SSH permission errors: mount an SSH key and known hosts into the container, or use HTTPS with provider tokens.

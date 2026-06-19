@@ -69,15 +69,21 @@ for repo_ref in "${REPOS[@]}"; do
   echo "Scanning $repo_name..."
 
   CHECKOUT_DIR="$WORK_ROOT/$(safe_repo_dir "$repo_name")"
+  CHECKOUT_ERROR_FILE="$(mktemp)"
   if ! checkout_repo "$repo_ref" "$CHECKOUT_DIR"; then
-    echo "  WARNING: failed to prepare $repo_name." >&2
+    checkout_error="$(sanitize_checkout_error "$CHECKOUT_ERROR_FILE")"
+    checkout_hint="$(checkout_failure_hint "$repo_ref")"
+    failure_message="Could not clone or read this repo. $checkout_error Hint: $checkout_hint"
+    rm -f "$CHECKOUT_ERROR_FILE"
+    echo "  WARNING: failed to prepare $repo_name: $checkout_error" >&2
     report_repo_section "$repo_name" "" >> "$BODY_FILE"
-    report_repo_failed "Could not clone or read this repo." >> "$BODY_FILE"
-    record_repo_state "$repo_name" "failed" "" "Could not clone or read this repo."
+    report_repo_failed "$failure_message" >> "$BODY_FILE"
+    record_repo_state "$repo_name" "failed" "" "$failure_message"
     printf '%s\n' "$repo_name" >> "$FAILED_FILE"
     FAILED=$((FAILED + 1))
     continue
   fi
+  rm -f "$CHECKOUT_ERROR_FILE"
 
   MANIFESTS="$(detect_manifests "$CHECKOUT_DIR")"
   report_repo_section "$repo_name" "$MANIFESTS" >> "$BODY_FILE"

@@ -56,11 +56,12 @@ checkout_repo() {
   local checkout_dir="$2"
   local clone_url
   local auth_header
+  local error_file="${CHECKOUT_ERROR_FILE:-/dev/null}"
 
   if [[ -d "$repo_ref" ]]; then
     mkdir -p "$checkout_dir"
     if git -C "$repo_ref" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-      git -C "$repo_ref" archive HEAD | tar -x -C "$checkout_dir"
+      git -C "$repo_ref" archive HEAD 2>"$error_file" | tar -x -C "$checkout_dir" 2>>"$error_file"
       return $?
     fi
 
@@ -69,19 +70,95 @@ checkout_repo() {
       --exclude=node_modules \
       --exclude=.venv \
       --exclude=venv \
-      -cf - . |
-      tar -x -C "$checkout_dir"
+      -cf - . 2>"$error_file" |
+      tar -x -C "$checkout_dir" 2>>"$error_file"
     return $?
   fi
 
   clone_url="$(repo_clone_url "$repo_ref")"
 
   if auth_header="$(git_auth_header "$clone_url")"; then
-    git -c "http.extraheader=AUTHORIZATION: basic $auth_header" clone --depth 1 --quiet "$clone_url" "$checkout_dir" 2>/dev/null
+    if ! git -c "http.extraheader=AUTHORIZATION: basic $auth_header" ls-remote --heads "$clone_url" >/dev/null 2>"$error_file"; then
+      {
+        echo "Read-access check failed before clone. The scanner only runs git ls-remote and git clone; it does not request write access."
+        cat "$error_file"
+      } > "${error_file}.tmp"
+      mv "${error_file}.tmp" "$error_file"
+      return 1
+    fi
+    git -c "http.extraheader=AUTHORIZATION: basic $auth_header" clone --depth 1 --quiet "$clone_url" "$checkout_dir" 2>"$error_file"
     return $?
   fi
 
-  git clone --depth 1 --quiet "$clone_url" "$checkout_dir" 2>/dev/null
+  if ! git ls-remote --heads "$clone_url" >/dev/null 2>"$error_file"; then
+    {
+      echo "Read-access check failed before clone. The scanner only runs git ls-remote and git clone; it does not request write access."
+      cat "$error_file"
+    } > "${error_file}.tmp"
+    mv "${error_file}.tmp" "$error_file"
+    return 1
+  fi
+
+  git clone --depth 1 --quiet "$clone_url" "$checkout_dir" 2>"$error_file"
+}
+
+checkout_failure_hint() {
+  local repo_ref="$1"
+  local clone_url
+
+  if [[ -d "$repo_ref" ]]; then
+    echo "Check that the local path is mounted into the container and readable."
+    return
+  fi
+
+  clone_url="$(repo_clone_url "$repo_ref")"
+
+  case "$clone_url" in
+    https://github.com/*)
+      if [[ -z "${GH_TOKEN:-}" ]]; then
+        echo "Set GH_TOKEN for private GitHub repos, or confirm the repo is public and the owner/name is correct."
+      else
+        echo "Use a GitHub fine-grained token for this repo with Contents: Read-only. GitHub may say 'Write access not granted' even when a read-only clone token is missing, not authorized for the repo, or blocked by org SSO."
+      fi
+      ;;
+    https://gitlab.com/*)
+      if [[ -z "${GITLAB_TOKEN:-}" ]]; then
+        echo "Set GITLAB_TOKEN for private GitLab repos, or confirm the project URL is public and correct."
+      else
+        echo "Check that GITLAB_TOKEN has read_repository access to this project."
+      fi
+      ;;
+    https://bitbucket.org/*)
+      if [[ -z "${BITBUCKET_TOKEN:-}" ]]; then
+        echo "Set BITBUCKET_USERNAME and BITBUCKET_TOKEN for private Bitbucket repos."
+      else
+        echo "Check that BITBUCKET_USERNAME/BITBUCKET_TOKEN have read access to this repository."
+      fi
+      ;;
+    git@*|ssh://*)
+      echo "Check that SSH keys and known_hosts are mounted into the container and can access this repo."
+      ;;
+    *)
+      echo "Check that the repo URL is reachable from inside the container."
+      ;;
+  esac
+}
+
+sanitize_checkout_error() {
+  local error_file="$1"
+
+  if [[ ! -s "$error_file" ]]; then
+    echo "No error output was captured from the checkout command."
+    return
+  fi
+
+  tr '\n' ' ' < "$error_file" |
+    sed -E \
+      -e 's#https://[^/@[:space:]]+@#https://***@#g' \
+      -e 's#(Authorization: basic )[A-Za-z0-9+/=]+#\1***#gi' \
+      -e 's#(x-access-token:)[^[:space:]]+#\1***#gi' \
+      -e 's#(oauth2:)[^[:space:]]+#\1***#gi' |
+    cut -c 1-500
 }
 
 git_auth_header() {

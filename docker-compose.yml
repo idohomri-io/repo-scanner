@@ -1,14 +1,16 @@
 services:
   repo-scanner:
-    image: ghcr.io/idohomri-io/repo-scanner:latest
-    pull_policy: always
+    # image: ghcr.io/idohomri-io/repo-scanner:latest
+    # pull_policy: always
+    build: .
     environment:
       # Comma-separated repo list.
       # Accepts GitHub owner/repo shorthand, full Git URLs, or local paths.
-      REPOS: owner/repo1,https://gitlab.com/group/repo2.git,https://bitbucket.org/workspace/repo3.git
+      REPOS:
 
       # Optional provider tokens for cloning private HTTPS repos.
-      GH_TOKEN:
+      # Prefer read-only tokens. For GitHub fine-grained PATs, grant Contents: Read-only.
+      GH_TOKEN: 
       GITLAB_TOKEN:
       BITBUCKET_USERNAME:
       BITBUCKET_TOKEN:
