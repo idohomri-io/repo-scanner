@@ -1,0 +1,13 @@
+services:
+  repo-scanner:
+    build: .
+    env_file: .env
+    volumes:
+      - ./reports:/app/reports
+      # Uncomment to scan local repos and reference them in REPOS as /repos/name.
+      # - /absolute/path/to/your/repos:/repos:ro
+      #
+      # Uncomment to clone private SSH URLs such as git@github.com:owner/repo.git.
+      # Prefer a deploy key or read-only key when possible.
+      # - ${HOME}/.ssh:/root/.ssh:ro
+    restart: unless-stopped

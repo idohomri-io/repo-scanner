@@ -1,0 +1,7 @@
+# One repo per line. Lines starting with # are ignored.
+#
+# Supported formats:
+# octocat/Hello-World
+# https://github.com/octocat/Hello-World.git
+# git@gitlab.com:group/project.git
+# /absolute/path/to/local/repo
