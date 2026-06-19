@@ -1,4 +1,4 @@
 reports/
 logs/
 .env
-deploy.sh
+scripts/
