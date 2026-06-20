@@ -114,6 +114,19 @@ LLM_MODEL: gpt-4.1-mini
 LLM_API_KEY: ...
 ```
 
+## Dashboard
+
+Reports are also served as a web dashboard at `http://localhost:8080` (configurable via `WEB_PORT`).
+
+By default the dashboard is open to anyone who can reach the port. To require a login, set both:
+
+```yaml
+DASHBOARD_USER: ...
+DASHBOARD_PASSWORD: ...
+```
+
+This enables HTTP Basic Auth, checked on every request. There's no database or session store — credentials are compared directly against these two values on each request. Leaving either unset leaves the dashboard open and logs a startup warning.
+
 ## Exit Codes
 
 `scan.sh` exits with `1` when it finds critical/high vulnerabilities or when at least one repo failed to scan. The daemon entrypoint logs that and keeps running on the configured interval.

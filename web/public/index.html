@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inspection Console — Dependency Vulnerability Overview</title>
+  <link rel="stylesheet" href="style.css">
+  <script>
+    (function () {
+      var stored = localStorage.getItem("theme");
+      var theme = stored || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+</head>
+<body>
+  <header class="page-header">
+    <div class="header-titles">
+      <h1>Inspection Console</h1>
+      <p id="header-subtitle" class="subtitle muted">Dependency vulnerability overview</p>
+    </div>
+
+    <div class="header-controls">
+      <label for="search-input" class="visually-hidden">Search repo, package, CVE, advisory</label>
+      <input id="search-input" type="search" placeholder="Search repo, package, CVE, advisory…" autocomplete="off">
+
+      <label for="severity-filter" class="visually-hidden">Severity</label>
+      <select id="severity-filter">
+        <option value="">All severities</option>
+        <option value="critical">Critical</option>
+        <option value="high">High</option>
+        <option value="moderate">Moderate</option>
+        <option value="low">Low</option>
+        <option value="unknown">Unknown</option>
+      </select>
+
+      <label for="package-filter" class="visually-hidden">Package</label>
+      <select id="package-filter">
+        <option value="">All packages</option>
+      </select>
+
+      <label for="scanner-filter" class="visually-hidden">Scanner</label>
+      <select id="scanner-filter">
+        <option value="">All scanners</option>
+      </select>
+
+      <button id="theme-toggle" type="button" aria-label="Toggle dark mode" aria-pressed="false">
+        <svg class="icon icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"></path>
+        </svg>
+        <svg class="icon icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="app-main">
+    <section id="overview-cards" class="overview-cards" aria-label="Overview">
+      <div class="skeleton-row">
+        <div class="skeleton skeleton-card"></div>
+        <div class="skeleton skeleton-card"></div>
+        <div class="skeleton skeleton-card"></div>
+        <div class="skeleton skeleton-card"></div>
+      </div>
+    </section>
+
+    <section id="status-banner-wrap"></section>
+
+    <section class="split-section">
+      <div id="repo-health" class="panel" aria-label="Repository health">
+        <p class="section-label">Repository health</p>
+        <div id="repo-health-body"></div>
+      </div>
+      <div id="affected-packages" class="panel" aria-label="Affected packages">
+        <p class="section-label">Affected packages</p>
+        <div id="affected-packages-body"></div>
+      </div>
+    </section>
+
+    <section class="panel findings-panel" aria-label="Findings">
+      <p class="section-label">Findings</p>
+      <div id="findings-table-wrap"></div>
+    </section>
+  </main>
+
+  <aside id="finding-drawer" class="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <span id="drawer-severity" class="severity-badge"></span>
+      <span id="drawer-package" class="drawer-package"></span>
+      <button id="drawer-close" type="button" aria-label="Close">&times;</button>
+    </div>
+    <div id="drawer-body" class="drawer-body"></div>
+  </aside>
+  <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+
+  <dialog id="run-log-modal">
+    <div class="modal-head">
+      <h2 id="run-log-title">Run history</h2>
+      <button id="run-log-close" type="button" aria-label="Close">&times;</button>
+    </div>
+    <div id="run-log-body"></div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

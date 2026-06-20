@@ -48,6 +48,21 @@ LOW=0
 UNKNOWN=0
 FAILED=0
 
+prune_old_reports() {
+  local report_dir="$1" keep="$2"
+  local dates
+  mapfile -t dates < <(cd "$report_dir" && ls -1 *.state.json 2>/dev/null | sed 's/\.state\.json$//' | sort -r)
+
+  if [[ ${#dates[@]} -le $keep ]]; then
+    return
+  fi
+
+  local d
+  for d in "${dates[@]:$keep}"; do
+    rm -f "$report_dir/$d.md" "$report_dir/$d.findings.json" "$report_dir/$d.state.json" "$report_dir/$d.webhook.json"
+  done
+}
+
 record_repo_state() {
   local repo="$1" status="$2" manifests="$3" error="${4:-}"
 
@@ -119,6 +134,9 @@ if [[ -s "$FINDINGS_NDJSON" ]]; then
 else
   printf '[]\n' > "$FINDINGS_FILE"
 fi
+
+STATE_FILE="$REPORT_DIR/$DATE_STR.state.json"
+jq -s '.' "$REPO_STATES_FILE" > "$STATE_FILE"
 
 while IFS=$'\t' read -r severity count; do
   case "$severity" in
@@ -203,10 +221,17 @@ if [[ -n "${WEBHOOK_URL:-}" ]]; then
       }
     )')"
 
+  WEBHOOK_SUCCESS="true"
   if ! curl -fsS -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$WEBHOOK_URL" >/dev/null 2>&1; then
     echo "WARNING: failed to POST results to WEBHOOK_URL — continuing." >&2
+    WEBHOOK_SUCCESS="false"
   fi
+
+  jq -n --argjson success "$WEBHOOK_SUCCESS" --arg checked_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{success: $success, checked_at: $checked_at}' > "$REPORT_DIR/$DATE_STR.webhook.json"
 fi
+
+prune_old_reports "$REPORT_DIR" "${REPORT_RETENTION_DAYS:-10}"
 
 if [[ $CRITICAL -gt 0 || $HIGH -gt 0 || $FAILED -gt 0 ]]; then
   exit 1

@@ -1,7 +1,7 @@
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        git jq ca-certificates curl tar \
+        git jq ca-certificates curl tar python3 \
     && rm -rf /var/lib/apt/lists/*
 
 ARG OSV_SCANNER_VERSION=2.3.8
@@ -20,7 +20,10 @@ RUN set -eux; \
 WORKDIR /app
 COPY scan.sh entrypoint.sh /app/
 COPY lib/ /app/lib/
+COPY web/ /app/web/
 COPY repos.txt /app/repos.txt
 RUN chmod +x /app/scan.sh /app/entrypoint.sh && mkdir -p /app/reports /app/logs
+
+EXPOSE 8080
 
 ENTRYPOINT ["/app/entrypoint.sh"]
