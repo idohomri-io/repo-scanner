@@ -193,6 +193,35 @@ def build_runs(report_dir, repo, limit):
     return {"repo": repo, "runs": runs}
 
 
+def scan_is_running(report_dir):
+    """Non-blocking probe of scan.sh's flock lock (reports/.scan.lock). If the
+    lock can be acquired and immediately released, no scan is in progress."""
+    lock_path = os.path.join(report_dir, ".scan.lock")
+    try:
+        result = subprocess.run(
+            ["flock", "-n", lock_path, "-c", "true"],
+            capture_output=True,
+            timeout=5,
+        )
+        return result.returncode != 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def trigger_scan():
+    """Spawns scan.sh in the background and returns immediately. scan.sh's
+    own flock guards against overlapping runs (including the scheduled loop
+    in entrypoint.sh), so this never blocks waiting for a prior scan."""
+    scan_script = os.path.join(APP_ROOT, "scan.sh")
+    subprocess.Popen(
+        ["bash", scan_script],
+        cwd=APP_ROOT,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+        start_new_session=True,
+    )
+
+
 def auth_configured():
     return bool(os.environ.get("DASHBOARD_USER")) and bool(os.environ.get("DASHBOARD_PASSWORD"))
 
@@ -302,7 +331,29 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(build_runs(self.report_dir, repo, limit))
             return
 
+        if parsed.path == "/api/scan/status":
+            self._send_json({"running": scan_is_running(self.report_dir)})
+            return
+
         self._send_static(parsed.path)
+
+    def do_POST(self):
+        if not check_auth(self.headers.get("Authorization")):
+            self._send_unauthorized()
+            return
+
+        parsed = urlparse(self.path)
+
+        if parsed.path == "/api/scan":
+            if scan_is_running(self.report_dir):
+                self._send_json({"status": "already_running"}, status=409)
+                return
+            trigger_scan()
+            self._send_json({"status": "started"}, status=202)
+            return
+
+        self.send_response(404)
+        self.end_headers()
 
 
 def make_handler(report_dir):

@@ -19,6 +19,20 @@ source "$SCRIPT_DIR/lib/scanners/osv.sh"
 
 mkdir -p "$REPORT_DIR"
 
+# Prevent overlapping runs (the scheduled entrypoint.sh loop and an on-demand
+# "Scan now" trigger from the dashboard could otherwise race on the same
+# dated report files). Skips quietly if flock isn't available (e.g. local
+# macOS dev outside Docker) rather than breaking those workflows.
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"$REPORT_DIR/.scan.lock"
+  if ! flock -n 9; then
+    echo "Another scan is already running for $REPORT_DIR — skipping this run." >&2
+    exit 0
+  fi
+else
+  echo "WARNING: 'flock' not found — concurrent scan protection disabled." >&2
+fi
+
 for bin in git jq curl osv-scanner; do
   if ! command -v "$bin" >/dev/null 2>&1; then
     echo "ERROR: '$bin' is required but not found on PATH." >&2

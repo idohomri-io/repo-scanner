@@ -11,6 +11,8 @@ const severityFilter = document.getElementById("severity-filter");
 const packageFilter = document.getElementById("package-filter");
 const scannerFilter = document.getElementById("scanner-filter");
 const themeToggle = document.getElementById("theme-toggle");
+const scanNowButton = document.getElementById("scan-now");
+const scanNowLabel = document.getElementById("scan-now-label");
 
 const drawer = document.getElementById("finding-drawer");
 const drawerBackdrop = document.getElementById("drawer-backdrop");
@@ -29,6 +31,7 @@ const SEVERITY_LABEL = { critical: "Critical", high: "High", moderate: "Moderate
 
 let allFindings = [];
 let overviewData = null;
+let scanPollTimer = null;
 
 function initTheme() {
   const stored = localStorage.getItem("theme");
@@ -512,8 +515,69 @@ async function openRunLog(repo) {
     .join("");
 }
 
+// ── Scan now ────────────────────────────────────────────────
+
+function setScanningUI(isScanning) {
+  scanNowButton.classList.toggle("is-scanning", isScanning);
+  scanNowButton.disabled = isScanning;
+  scanNowLabel.textContent = isScanning ? "Scanning…" : "Scan now";
+}
+
+function stopScanPolling() {
+  if (scanPollTimer) {
+    clearInterval(scanPollTimer);
+    scanPollTimer = null;
+  }
+}
+
+function startScanPolling() {
+  stopScanPolling();
+  scanPollTimer = setInterval(async () => {
+    try {
+      const res = await fetch("/api/scan/status");
+      const data = await res.json();
+      if (!data.running) {
+        stopScanPolling();
+        setScanningUI(false);
+        loadOverview();
+      }
+    } catch (err) {
+      stopScanPolling();
+      setScanningUI(false);
+    }
+  }, 3000);
+}
+
+async function checkScanStatusOnLoad() {
+  try {
+    const res = await fetch("/api/scan/status");
+    const data = await res.json();
+    if (data.running) {
+      setScanningUI(true);
+      startScanPolling();
+    }
+  } catch (err) {
+    // Status endpoint unavailable (e.g. flock missing outside Docker) — leave button enabled.
+  }
+}
+
+async function triggerScan() {
+  setScanningUI(true);
+  try {
+    const res = await fetch("/api/scan", { method: "POST" });
+    if (res.status === 409 || res.status === 202) {
+      startScanPolling();
+    } else {
+      setScanningUI(false);
+    }
+  } catch (err) {
+    setScanningUI(false);
+  }
+}
+
 // ── Wiring ───────────────────────────────────────────────────
 
+scanNowButton.addEventListener("click", triggerScan);
 themeToggle.addEventListener("click", toggleTheme);
 searchInput.addEventListener("input", applyFilters);
 severityFilter.addEventListener("change", applyFilters);
@@ -533,3 +597,4 @@ runLogModal.addEventListener("click", (e) => {
 
 initTheme();
 loadOverview();
+checkScanStatusOnLoad();

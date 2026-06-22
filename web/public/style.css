@@ -135,6 +135,46 @@ select {
   flex-shrink: 0;
 }
 
+#scan-now {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2.1rem;
+  padding: 0 0.7rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+#scan-now:hover:not(:disabled) {
+  border-color: var(--sev-low);
+}
+
+#scan-now:disabled {
+  cursor: default;
+  color: var(--text-muted);
+}
+
+#scan-now.is-scanning .icon-scan {
+  animation: scan-spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #scan-now.is-scanning .icon-scan {
+    animation: none;
+  }
+}
+
+@keyframes scan-spin {
+  to { transform: rotate(360deg); }
+}
+
 .icon {
   width: 1.05rem;
   height: 1.05rem;
@@ -146,6 +186,7 @@ select {
 
 #search-input:focus-visible,
 select:focus-visible,
+#scan-now:focus-visible,
 #theme-toggle:focus-visible,
 .view-history:focus-visible,
 .finding-row:focus-visible,
